@@ -36,11 +36,78 @@ with st.sidebar:
 st.title("🛡️ Web Attack Detection System")
 st.markdown("Analyze URLs for SQLi, XSS, Path Traversal and other web attacks")
 
+# Suggested URLs as templates
+attack_examples = {
+    "Normal URLs": "http://localhost:8080/tienda1/publico/entrar.jsp HTTP/1.1" ,
+    
+    "XSS Examples": "https://example.com/search?q=<script>alert(1)</script>",
+
+    "SQL Injection": "https://example.com/products?category='; DROP TABLE users--", 
+
+    "Path Traversal": "https://example.com/download?file=../../etc/passwd"
+}
+
 with st.form("analysis_form"):
-    url = st.text_input("Enter URL :", placeholder="https://example.com/login.php?--")
-    content = st.text_area("Request Content:", height=100,
-                         placeholder="Optional for POST/PUT requests...")
+    # Attack type selector
+    attack_type = st.selectbox("Choose a request type to simulate a potential web attack (or select Custom to enter your own):", 
+                               ["Custom URL"] + list(attack_examples.keys()))
+
+    # Automatically populate URL based on selected attack type
+    if attack_type == "Custom URL":
+        url = st.text_input("Target URL for Analysis:", placeholder="https://example.com/login.php?--")
+    else:
+        url = st.text_input("Target URL for Analysis:", value=attack_examples[attack_type])
+
+    # Request content input
+    content = st.text_area("Request Content:", height=75, placeholder="Optional for POST/PUT requests...")
+    
     submitted = st.form_submit_button("Analyze Security Risk 🔍", type="primary")
+
+# with st.form("analysis_form"):
+#     # Attack type selector
+#     attack_type = st.selectbox("Select attack type to preview:", 
+#                              ["Custom URL"] + list(attack_examples.keys()))
+    
+#     # Dynamic URL selection
+#     if attack_type != "Custom URL":
+#         example_url = st.selectbox("Select example:", attack_examples[attack_type])
+#         url = st.text_input("Enter URL:", value=example_url)
+#     else:
+#         url = st.text_input("Enter URL:", placeholder="https://example.com/login.php?--")
+    
+#     # Rest of your form
+#     content = st.text_area("Request Content:", height=75, placeholder="Optional for POST/PUT requests...")
+#     submitted = st.form_submit_button("Analyze Security Risk 🔍", type="primary")
+
+st.markdown("""
+<style>
+.url-badge {
+    display: inline-block;
+    padding: 0.25em 0.4em;
+    margin: 0.1em;
+    font-size: 75%;
+    font-weight: 700;
+    line-height: 1;
+    text-align: center;
+    white-space: nowrap;
+    vertical-align: baseline;
+    border-radius: 0.25rem;
+    cursor: pointer;
+}
+.badge-normal { color: #fff; background-color: #28a745; }        
+.badge-xss { color: #fff; background-color: #dc3545; }
+.badge-sqli { color: #fff; background-color: #fd7e14; }
+.badge-path { color: #fff; background-color: #6f42c1; }
+</style>
+""", unsafe_allow_html=True)
+
+examples = {
+    "Normal": ("safe-example", "badge-normal"),
+    "XSS": ("<script>alert(1)</script>", "badge-xss"),
+    "SQLi": ("1' OR 1=1--", "badge-sqli"),
+    "Path": ("../../etc/passwd", "badge-path")
+}
+
 
 if submitted and url:
     with st.spinner("Scanning for threats..."):
@@ -64,7 +131,31 @@ if submitted and url:
             risk_level = "High" if result['is_anomalous'] else "Low"
             st.metric("Risk Level", risk_level, delta_color="inverse")
 
-        
+
+        # Dynamic Tab Header Color
+        tab_text_color = "#3c763d" if not result['is_anomalous'] else "#a94442"
+
+        st.markdown(f"""
+        <style>
+        /* Target the outer tab container */
+        .stTabs [data-baseweb="tab"] {{
+            font-size: 0px !important; /* Hide default text size to prevent overlap */
+        }}
+
+        /* Target the actual text inside the tab */
+        .stTabs [data-baseweb="tab"] > div {{
+            font-size: 17px !important;
+            font-weight: 700 !important;
+            color: #fff !important;
+        }}
+
+        /* Optional: hover effect */
+        .stTabs [data-baseweb="tab"]:hover > div {{
+            color: {tab_text_color} !important;
+        }}
+        </style>
+        """, unsafe_allow_html=True)
+
         # Visualizations
         tab1, tab2, tab3 = st.tabs(["Risk Meter", "Threat Indicators", "Recommendations"])
         

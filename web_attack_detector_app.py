@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 from web_attack_detector_utils import *
 
 # UI Config
@@ -49,37 +50,96 @@ if submitted and url:
         st.subheader("Analysis Results")
         
         col1, col2, col3 = st.columns(3)
+
         with col1:
-            st.metric("Prediction", result['prediction'])
+            color = "red" if result['is_anomalous'] else "green"
+            status_text = "Anomalous 🔴" if result['is_anomalous'] else "Normal 🟢"
+            st.markdown(f"**Prediction**")
+            st.markdown(f"<p style='color:{color}; font-size: 28px; font-weight: bold;'>{status_text}</p>",unsafe_allow_html=True)
+
         with col2:
             st.metric("Anomaly Probability", f"{result['probability_anomalous']:.1%}")
+
         with col3:
-            st.metric("Risk Level", 
-                     "High" if result['is_anomalous'] else "Low",
-                     delta_color="inverse")
+            risk_level = "High" if result['is_anomalous'] else "Low"
+            st.metric("Risk Level", risk_level, delta_color="inverse")
+
         
         # Visualizations
         tab1, tab2, tab3 = st.tabs(["Risk Meter", "Threat Indicators", "Recommendations"])
         
         with tab1:
-            fig = px.bar(x=["Normal", "Anomalous"],
-                        y=[result['probability_normal'], result['probability_anomalous']],
-                        # color=["green", "red"],
-                        title="Classification Probabilities")
+            fig = go.Figure(go.Indicator(
+                mode="gauge+number",
+                value=result['probability_anomalous'],
+                title={'text': "Threat Probability"},
+                gauge={
+                    'axis': {'range': [0, 1]},
+                    'bar': {'color': "red" if result['is_anomalous'] else "green"},
+                    'steps': [
+                        {'range': [0, 0.5], 'color': "#dff0d8"},
+                        {'range': [0.5, 1], 'color': "#f2dede"}
+                    ]
+                },
+                domain={'x': [0, 1], 'y': [0.2, 1]}  # Moves the gauge up to make space for custom annotation
+            ))
+
+            # Add custom text below the gauge
+            fig.add_annotation(
+                x=0.5, y=0.05,
+                text=f"<b>Status:</b> {'Anomalous 🔴' if result['is_anomalous'] else 'Normal 🟢'}",
+                showarrow=False,
+                font=dict(size=16),
+                xref="paper", yref="paper",
+                align="center"
+            )
+
+            # Render
             st.plotly_chart(fig, use_container_width=True)
-        
+
+
+                    
         with tab2:
             if result['is_anomalous']:
-                st.error("**Detected Threats:**")
-                if "script" in url.lower():
-                    st.warning("- Potential XSS (JavaScript detected)")
-                if count_per(url) > 2:
-                    st.warning(f"- Suspicious character count (%): {count_per(url)}")
+                # st.error("**Detected Threats**")
+
+                # SQL Injection Detection
+                if any(keyword in url.lower() for keyword in ["'", "--", " or ", "1=1", "union", "select", "drop", "insert"]):
+                    st.warning("- **SQL Injection Detected** (e.g., `' OR 1=1`, `UNION SELECT`, etc.)")
+
+                # XSS Detection
+                if any(tag in url.lower() for tag in ["<script", "javascript:", "onerror=", "alert(", "onload="]):
+                    st.warning("- **Cross Site Scripting (XSS)** Detected")
+
+                # Path Traversal
+                if "../" in url or "%2e%2e%2f" in url.lower():
+                    st.warning("- **Path Traversal** Detected (e.g., `../etc/passwd`)")
+
+                # Shell Injection
+                if any(cmd in url.lower() for cmd in [";ls", "|whoami", "`cat", "$(cat"]):
+                    st.warning("- **Command Injection** Detected")
+
+                # Encoding or Obfuscation
+                if "%" in url and count_per(url) > 2:
+                    st.warning(f"- **Suspicious Encoding Detected** (% count = {count_per(url)})")
+
+                # URL Shortener
                 if shortening_service(url):
-                    st.warning("- URL shortening service detected")
+                    st.warning("- **URL Shortening Service** Detected (can hide true destination)")
+
+                # Simulated Attack Description
+                st.markdown("#### 🧪 Simulated Attack Summary")
+                st.markdown("""
+                This request exhibits behavior matching known **malicious patterns**.  
+                It's likely a **simulated** or **attempted attack** involving:
+                - Input manipulation
+                - Encoding tricks
+                - Signature-based patterns from real-world attack data.
+                """)
             else:
-                st.success("No obvious threat patterns detected")
-        
+                st.success("✅ No obvious threat patterns detected")
+
+            
         with tab3:
             if result['is_anomalous']:
                 st.warning("""
